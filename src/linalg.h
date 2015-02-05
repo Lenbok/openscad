@@ -3,12 +3,16 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
-#include<Eigen/StdVector>
+#include <Eigen/StdVector>
 
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector2d)
 using Eigen::Vector2d;
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3d)
 using Eigen::Vector3d;
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3f)
+using Eigen::Vector3f;
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3i)
+using Eigen::Vector3i;
 
 typedef Eigen::AlignedBox<double, 3> BoundingBox;
 using Eigen::Matrix3f;
@@ -21,9 +25,6 @@ bool matrix_contains_infinity( const Transform3d &m );
 bool matrix_contains_nan( const Transform3d &m );
 
 BoundingBox operator*(const Transform3d &m, const BoundingBox &box);
-Vector3d getBoundingCenter(BoundingBox bbox);
-double getBoundingRadius(BoundingBox bbox);
-
 
 class Color4f : public Eigen::Vector4f
 {

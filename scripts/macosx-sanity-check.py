@@ -32,18 +32,18 @@ def lookup_library(file):
         if re.search("@executable_path", file):
             abs = re.sub("^@executable_path", executable_path, file)
             if os.path.exists(abs): found = abs
-            if DEBUG: print "Lib in @executable_path found: " + found
+            if DEBUG: print "Lib in @executable_path found: " + str(found)
         elif re.search("\.app/", file):
             found = file
-            if DEBUG: print "App found: " + found
+            if DEBUG: print "App found: " + str(found)
         elif re.search("\.framework/", file):
             found = os.path.join("/Library/Frameworks", file)
-            if DEBUG: print "Framework found: " + found
+            if DEBUG: print "Framework found: " + str(found)
         else:
             for path in os.getenv("DYLD_LIBRARY_PATH").split(':'):
                 abs = os.path.join(path, file)
                 if os.path.exists(abs): found = abs
-            if DEBUG: print "Library found: " + found
+            if DEBUG: print "Library found: " + str(found)
     else:
         found = file
     return found
@@ -79,6 +79,12 @@ def validate_lib(lib):
     p  = subprocess.Popen(["otool", "-l", lib], stdout=subprocess.PIPE)
     output = p.communicate()[0]
     if p.returncode != 0: return False
+    # Check deployment target
+    m = re.search("LC_VERSION_MIN_MACOSX.*\n(.*)\n\s+version (.*)", output, re.MULTILINE)
+    deploymenttarget = float(m.group(2))
+    if deploymenttarget > 10.7:
+        print "Error: Unsupported deployment target " + m.group(2) + " found: " + lib
+        return False
 # We don't support Snow Leopard anymore
 #    if re.search("LC_DYLD_INFO_ONLY", output):
 #        print "Error: Requires Snow Leopard: " + lib

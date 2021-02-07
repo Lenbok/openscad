@@ -7,6 +7,7 @@
 #include "builtin.h"
 #include "localscope.h"
 #include "exceptions.h"
+#include "boost-utils.h"
 
 EvalContext::EvalContext(const std::shared_ptr<Context> parent, const AssignmentList &args, const Location &loc, const class LocalScope *const scope)
 	: Context(parent), loc(loc), eval_arguments(args), scope(scope)
@@ -19,15 +20,14 @@ const std::string &EvalContext::getArgName(size_t i) const
 	return this->eval_arguments[i]->getName();
 }
 
-ValuePtr EvalContext::getArgValue(size_t i, const std::shared_ptr<Context> ctx) const
+Value EvalContext::getArgValue(size_t i, const std::shared_ptr<Context> ctx) const
 {
 	assert(i < this->eval_arguments.size());
 	const auto &arg = this->eval_arguments[i];
-	ValuePtr v;
 	if (arg->getExpr()) {
-		v = arg->getExpr()->evaluate(ctx ? ctx : (const_cast<EvalContext *>(this))->get_shared_ptr());
+		return arg->getExpr()->evaluate(ctx ? ctx : (const_cast<EvalContext *>(this))->get_shared_ptr());
 	}
-	return v;
+	return Value::undefined.clone();
 }
 
 /*!
@@ -54,18 +54,18 @@ AssignmentMap EvalContext::resolveArguments(const AssignmentList &args, const As
           if (arg->getName() == name) found = true;
         }
         if (!found) {
-          PRINTB("WARNING: variable %s not specified as parameter, %s", name % this->loc.toRelativeString(this->documentPath()));
+		  LOG(message_group::Warning,this->loc,this->documentPath(),"variable %1$s not specified as parameter",name);
         }
       }
       if (resolvedArgs.find(name) != resolvedArgs.end()) {
-          PRINTB("WARNING: argument %s supplied more than once, %s", name % this->loc.toRelativeString(this->documentPath()));
+          LOG(message_group::Warning,this->loc,this->documentPath(),"argument %1$s supplied more than once",name);
       }
       resolvedArgs[name] = expr;
     }
     // If positional, find name of arg with this position
     else if (posarg < args.size()) resolvedArgs[args[posarg++]->getName()] = expr;
     else if (!silent && !tooManyWarned){
-      PRINTB("WARNING: Too many unnamed arguments supplied, %s", this->loc.toRelativeString(this->documentPath()));
+      LOG(message_group::Warning,this->loc,this->documentPath(),"Too many unnamed arguments supplied");
       tooManyWarned=true;
     }
   }
@@ -85,15 +85,14 @@ shared_ptr<ModuleInstantiation> EvalContext::getChild(size_t i) const
 void EvalContext::assignTo(std::shared_ptr<Context> target) const
 {
 	for (const auto &assignment : this->eval_arguments) {
-		ValuePtr v;
-		if (assignment->getExpr()) v = assignment->getExpr()->evaluate(target);
+		Value v = (assignment->getExpr()) ? assignment->getExpr()->evaluate(target) : Value::undefined.clone();
 		
-		if (assignment->getName().empty()){
-			PRINTB("WARNING: Assignment without variable name %s, %s", v->toEchoString() % this->loc.toRelativeString(target->documentPath()));
+		if (assignment->getName().empty()) {
+			LOG(message_group::Warning,this->loc,target->documentPath(),"Assignment without variable name %1$s",v.toEchoString());
 		} else if (target->has_local_variable(assignment->getName())) {
-			PRINTB("WARNING: Ignoring duplicate variable assignment %s = %s, %s", assignment->getName() % v->toEchoString() % this->loc.toRelativeString(target->documentPath()));
+			LOG(message_group::Warning,this->loc,target->documentPath(),"Ignoring duplicate variable assignment %1$s = %2$s",assignment->getName(),v.toEchoString());
 		} else {
-			target->set_variable(assignment->getName(), v);
+			target->set_variable(assignment->getName(), std::move(v));
 		}
 	}
 }
@@ -104,7 +103,7 @@ std::ostream &operator<<(std::ostream &stream, const EvalContext &ec)
 		if (i > 0) stream << ", ";
 		if (!ec.getArgName(i).empty()) stream << ec.getArgName(i) << " = ";
 		auto val = ec.getArgValue(i);
-		stream << val->toEchoString();
+		stream << val.toEchoString();
 	}
 	return stream;
 }
@@ -134,11 +133,11 @@ std::string EvalContext::dump(const AbstractModule *mod, const ModuleInstantiati
 		if (m) {
 			s << boost::format("  module args:");
 			for(const auto &arg : m->definition_arguments) {
-				s << boost::format("    %s = %s") % arg->getName() % *(variables[arg->getName()]);
+				auto result = variables.find(arg->getName());
+				s << boost::format("    %s = %s") % arg->getName() % variables.get(arg->getName());
 			}
 		}
 	}
 	return s.str();
 }
 #endif
-

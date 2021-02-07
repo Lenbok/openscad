@@ -26,7 +26,7 @@ public:
     virtual bool is_default() const;
 
 protected:
-    SettingsEntry(const std::string category, const std::string name, const Value range, const Value def);
+    SettingsEntry(const std::string category, const std::string name, const Value &range, const Value &def);
     virtual ~SettingsEntry();
 
     friend class Settings;
@@ -53,7 +53,8 @@ public:
     static SettingsEntry highlightCurrentLine;
     static SettingsEntry enableBraceMatching;
     static SettingsEntry enableLineNumbers;
-
+    static SettingsEntry enableNumberScrollWheel;
+    static SettingsEntry modifierNumberScrollWheel;
 	static SettingsEntry octoPrintUrl;
 	static SettingsEntry octoPrintApiKey;
 	static SettingsEntry octoPrintFileFormat;
@@ -134,9 +135,9 @@ public:
     void visit(class SettingsVisitor& visitor);
     SettingsEntry* getSettingEntryByName(const std::string &name);
 
-    const Value &defaultValue(const SettingsEntry& entry) const;
-    const Value &get(const SettingsEntry& entry) const;
-    void set(SettingsEntry& entry, const Value &val);
+    const Value & defaultValue(const SettingsEntry& entry) const;
+    const Value & get(const SettingsEntry& entry) const;
+    void set(SettingsEntry& entry, Value val);
 
 private:
     Settings();

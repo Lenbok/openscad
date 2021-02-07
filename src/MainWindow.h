@@ -32,6 +32,7 @@ class MainWindow : public QMainWindow, public Ui::MainWindow, public InputEventH
 public:
 	class Preferences *prefs;
 
+	QTimer *consoleUpdater;
 	QTimer *animate_timer;
 	int anim_step;
 	int anim_numsteps;
@@ -73,12 +74,16 @@ public:
 	QWidget *editorDockTitleWidget;
 	QWidget *consoleDockTitleWidget;
 	QWidget *parameterDockTitleWidget;
+	QWidget *errorLogDockTitleWidget;
 
 	int compileErrors;
 	int compileWarnings;
 
 	MainWindow(const QStringList &filenames);
 	~MainWindow();
+
+private:
+	void consoleOutputRaw(const QString& msg);
 
 protected:
 	void closeEvent(QCloseEvent *event) override;
@@ -96,12 +101,15 @@ private slots:
 	void setColorScheme(const QString &cs);
 	void showProgress();
 	void openCSGSettingsChanged();
-	void consoleOutput(const QString &msg);
+	void consoleOutput(const Message& msgObj);
 	void setCursor();
+	void errorLogOutput(const Message &log_msg);
 
 public:
-	static void consoleOutput(const std::string &msg, void *userdata);
-	static void noOutput(const std::string &, void*) {};  // /dev/null
+	static void consoleOutput(const Message &msgObj, void *userdata);
+	static void errorLogOutput(const Message &log_msg, void *userdata);
+	static void noOutputConsole(const Message &, void*) {};  // /dev/null
+	static void noOutputErrorLog(const Message &, void*) {};  // /dev/null
 
 	bool fileChangedOnDisk();
 	void parseTopLevelDocument(bool rebuildParameterWidget);
@@ -109,8 +117,6 @@ public:
 
 private:
 	void initActionIcon(QAction *action, const char *darkResource, const char *lightResource);
-	void handleFileDrop(const QString &filename);
-	void updateCamera(const std::shared_ptr<class FileContext> ctx);
 	void updateTemporalVariables();
 	void updateCompileResult();
 	void compile(bool reload, bool forcedone = false, bool rebuildParameterWidget=true);
@@ -120,13 +126,15 @@ private:
 
 	void loadViewSettings();
 	void loadDesignSettings();
-    void updateWindowSettings(bool console, bool editor, bool customizer, bool editorToolbar, bool viewToolbar);
+	void prepareCompile(const char *afterCompileSlot, bool procevents, bool preview);
+    void updateWindowSettings(bool console, bool editor, bool customizer, bool errorLog, bool editorToolbar, bool viewToolbar);
 	void saveBackup();
 	void writeBackup(class QFile *file);
 	void show_examples();
 	void setDockWidgetTitle(QDockWidget *dockWidget, QString prefix, bool topLevel);
 	void addKeyboardShortCut(const QList<QAction *> &actions);
 	void updateStatusBar(class ProgressWidget *progressWidget);
+	void activateWindow(int);
 
   class LibraryInfoDialog* library_info_dialog;
   class FontListDialog *font_list_dialog;
@@ -134,6 +142,7 @@ private:
 public slots:
 	void updateRecentFiles(EditorInterface *edt);
 	void updateRecentFileActions();
+	void handleFileDrop(const QUrl& url);
 
 private slots:
 	void actionOpen();
@@ -157,13 +166,26 @@ private slots:
 	void copyViewportTranslation();
 	void copyViewportRotation();
 	void copyViewportDistance();
+	void copyViewportFov();
 	void preferences();
     void hideEditorToolbar();
     void hide3DViewToolbar();
+	void showLink(const QString);
+	void showEditor();
 	void hideEditor();
-	void hideConsole();
 	void showConsole();
+	void hideConsole();
+	void showErrorLog();
+	void hideErrorLog();
+	void showParameters();
 	void hideParameters();
+	void on_windowActionSelectEditor_triggered();
+	void on_windowActionSelectConsole_triggered();
+	void on_windowActionSelectCustomizer_triggered();
+	void on_windowActionSelectErrorLog_triggered();
+	void on_windowActionNextWindow_triggered();
+	void on_windowActionPreviousWindow_triggered();
+	void on_editActionInsertTemplate_triggered();
 
 public slots:
 	void hideFind();
@@ -210,6 +232,7 @@ private slots:
 	void actionExportAMF();
 	void actionExportDXF();
 	void actionExportSVG();
+    void actionExportPDF();
 	void actionExportCSG();
 	void actionExportImage();
 	void actionCopyViewport();
@@ -233,6 +256,7 @@ public:
 
 	void changedTopLevelConsole(bool);
 	void changedTopLevelEditor(bool);
+	void changedTopLevelErrorLog(bool);
 
 	QList<double> getTranslation() const;
 	QList<double> getRotation() const;
@@ -242,11 +266,15 @@ public slots:
 	void on_editorDock_visibilityChanged(bool);
 	void on_consoleDock_visibilityChanged(bool);
 	void on_parameterDock_visibilityChanged(bool);
+	void on_errorLogDock_visibilityChanged(bool);
 	void on_toolButtonCompileResultClose_clicked();
 	void editorTopLevelChanged(bool);
 	void consoleTopLevelChanged(bool);
 	void parameterTopLevelChanged(bool);
+	void errorLogTopLevelChanged(bool);
 	void processEvents();
+	void jumpToLine(int,int);
+	void openFileFromPath(QString,int);
 
 #ifdef ENABLE_OPENCSG
 	void viewModePreview();

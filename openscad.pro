@@ -194,6 +194,7 @@ CONFIG += libzip
 CONFIG += hidapi
 CONFIG += spnav
 CONFIG += double-conversion
+CONFIG += cairo
 
 # Make experimental features available
 experimental {
@@ -228,6 +229,7 @@ load(uic)
 uic.commands += -tr q_
 
 FORMS   += src/MainWindow.ui \
+           src/ErrorLog.ui \
            src/Preferences.ui \
            src/OpenCSGWarningDialog.ui \
            src/AboutDialog.ui \
@@ -258,6 +260,7 @@ HEADERS += src/AST.h \
 SOURCES += src/AST.cc \
            src/ModuleInstantiation.cc \
            src/Assignment.cc \
+           src/export_pdf.cc \
            src/expr.cc \
            src/function.cc \
            src/module.cc \
@@ -273,6 +276,8 @@ HEADERS += src/version_check.h \
            src/ProgressWidget.h \
            src/parsersettings.h \
            src/renderer.h \
+	   src/VertexArray.h \
+           src/VBORenderer.h \
            src/settings.h \
            src/rendersettings.h \
            src/colormap.h \
@@ -372,6 +377,7 @@ HEADERS += src/version_check.h \
            \
            src/Dock.h \
            src/Console.h \
+           src/ErrorLog.h \
            src/AutoUpdater.h \
            src/launchingscreen.h \
            src/LibraryInfoDialog.h \
@@ -512,6 +518,8 @@ SOURCES += \
            src/import_amf.cc \
            src/import_3mf.cc \
            src/renderer.cc \
+	   src/VertexArray.cc \
+           src/VBORenderer.cc \
            src/colormap.cc \
            src/ThrownTogetherRenderer.cc \
            src/svg.cc \
@@ -530,6 +538,7 @@ SOURCES += \
            src/UIUtils.cc \
            src/Dock.cc \
            src/Console.cc \
+           src/ErrorLog.cc \
            src/FontListDialog.cc \
            src/FontListTableView.cc \
            src/launchingscreen.cc \

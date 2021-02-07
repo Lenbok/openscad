@@ -264,16 +264,17 @@ AbstractNode *ColorModule::instantiate(const std::shared_ptr<Context>& ctx, cons
 	c->setVariables(evalctx, args);
 	inst->scope.apply(evalctx);
 
-	auto v = c->lookup_variable("c");
-	if (v->type() == Value::Type::VECTOR) {
+	const auto &v = c->lookup_variable("c");
+	if (v.type() == Value::Type::VECTOR) {
+		const auto &vec = v.toVector();
 		for (size_t i = 0; i < 4; ++i) {
-			node->color[i] = i < v->toVector().size() ? (float)v->toVector()[i]->toDouble() : 1.0f;
+			node->color[i] = i < v.toVector().size() ? (float)v.toVector()[i].toDouble() : 1.0f;
 			if (node->color[i] > 1 || node->color[i] < 0){
-				PRINTB_NOCACHE("WARNING: color() expects numbers between 0.0 and 1.0. Value of %.1f is out of range, %s", node->color[i] % inst->location().toRelativeString(ctx->documentPath()));
+				LOG(message_group::Warning,inst->location(),ctx->documentPath(),"color() expects numbers between 0.0 and 1.0. Value of %1$.1f is out of range",node->color[i]);
 			}
 		}
-	} else if (v->type() == Value::Type::STRING) {
-		auto colorname = v->toString();
+	} else if (v.type() == Value::Type::STRING) {
+		auto colorname = v.toString();
 		boost::algorithm::to_lower(colorname);
 		if (webcolors.find(colorname) != webcolors.end())	{
 			node->color = webcolors.at(colorname);
@@ -283,14 +284,14 @@ AbstractNode *ColorModule::instantiate(const std::shared_ptr<Context>& ctx, cons
 			if (hexColor) {
 				node->color = *hexColor;
 			} else {
-				PRINTB_NOCACHE("WARNING: Unable to parse color \"%s\", %s. ", colorname % inst->location().toRelativeString(ctx->documentPath()));
-				PRINT_NOCACHE("WARNING: Please see https://en.wikipedia.org/wiki/Web_colors");
+				LOG(message_group::Warning,inst->location(),ctx->documentPath(),"Unable to parse color \"%1$s\"",colorname);
+				LOG(message_group::None,Location::NONE,"","Please see https://en.wikipedia.org/wiki/Web_colors");
 			}
 		}
 	}
-	auto alpha = c->lookup_variable("alpha");
-	if (alpha->type() == Value::Type::NUMBER) {
-		node->color[3] = alpha->toDouble();
+	const auto &alpha = c->lookup_variable("alpha");
+	if (alpha.type() == Value::Type::NUMBER) {
+		node->color[3] = alpha.toDouble();
 	}
 
 	auto instantiatednodes = inst->instantiateChildren(evalctx);

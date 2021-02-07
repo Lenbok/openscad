@@ -35,12 +35,12 @@
 #include "printutils.h"
 #include "compiler_specific.h"
 #include <sstream>
+#include "boost-utils.h"
 
 std::vector<std::string> StaticModuleNameStack::stack;
 
 static void NOINLINE print_err(std::string name, const Location &loc,const std::shared_ptr<const Context> ctx){
-	std::string locs = loc.toRelativeString(ctx->documentPath());
-	PRINTB("ERROR: Recursion detected calling module '%s' %s", name % locs);
+	LOG(message_group::Error,loc,ctx->documentPath(),"Recursion detected calling module '%1$s'",name);
 }
 
 AbstractNode *UserModule::instantiate(const std::shared_ptr<Context>& ctx, const ModuleInstantiation *inst, const std::shared_ptr<EvalContext>& evalctx) const
@@ -57,16 +57,16 @@ AbstractNode *UserModule::instantiate(const std::shared_ptr<Context>& ctx, const
 
 	ContextHandle<ModuleContext> c{Context::create<ModuleContext>(ctx, evalctx)};
 	// set $children first since we might have variables depending on it
-	c->set_variable("$children", ValuePtr(double(inst->scope.children_inst.size())));
+	c->set_variable("$children", Value(double(inst->scope.children_inst.size())));
 	StaticModuleNameStack name{inst->name()}; // push on static stack, pop at end of method!
-	c->set_variable("$parent_modules", ValuePtr(double(StaticModuleNameStack::size())));
+	c->set_variable("$parent_modules", Value(double(StaticModuleNameStack::size())));
 	c->initializeModule(*this);
 	// FIXME: Set document path to the path of the module
 #if 0 && DEBUG
 	c.dump(this, inst);
 #endif
 
-	AbstractNode *node = new GroupNode(inst, evalctx);
+	AbstractNode *node = new GroupNode(inst, evalctx, std::string("module ") + this->name);
 	std::vector<AbstractNode *> instantiatednodes = this->scope.instantiateChildren(c.ctx);
 	node->children.insert(node->children.end(), instantiatednodes.begin(), instantiatednodes.end());
 

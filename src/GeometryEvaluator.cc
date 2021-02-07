@@ -29,6 +29,7 @@
 #include "degree_trig.h"
 #include <ciso646> // C alternative tokens (xor)
 #include <algorithm>
+#include "boost-utils.h"
 
 #pragma push_macro("NDEBUG")
 #undef NDEBUG
@@ -70,8 +71,7 @@ shared_ptr<const Geometry> GeometryEvaluator::evaluateGeometry(const AbstractNod
 				if (!N->isEmpty()) {
 					bool err = CGALUtils::createPolySetFromNefPolyhedron3(*N->p3, *ps);
 					if (err) {
-						PRINT("ERROR: Nef->PolySet failed");
-					}
+						LOG(message_group::Error,Location::NONE,"","Nef->PolySet failed.");					}
 				}
 			}
 
@@ -100,8 +100,7 @@ bool GeometryEvaluator::isValidDim(const Geometry::GeometryItem &item, unsigned 
 	if (!item.first->modinst->isBackground() && item.second) {
 		if (!dim) dim = item.second->getDimension();
 		else if (dim != item.second->getDimension() && !item.second->isEmpty()) {
-			std::string loc = item.first->modinst->location().toRelativeString(this->tree.getDocumentPath());
-			PRINTB("WARNING: Mixing 2D and 3D objects is not supported, %s", loc);
+			LOG(message_group::Warning,item.first->modinst->location(),this->tree.getDocumentPath(),"Mixing 2D and 3D objects is not supported");
 			return false;
 		}
 	}
@@ -110,15 +109,13 @@ bool GeometryEvaluator::isValidDim(const Geometry::GeometryItem &item, unsigned 
 
 GeometryEvaluator::ResultObject GeometryEvaluator::applyToChildren(const AbstractNode &node, OpenSCADOperator op)
 {
+	CGALUtils::CGALErrorBehaviour behaviour{CGAL::THROW_EXCEPTION};
+
 	unsigned int dim = 0;
 	for(const auto &item : this->visitedchildren[node.index()]) {
 		if (!isValidDim(item, dim)) break;
 	}
-	if (dim == 2) {
-		Polygon2d *p2d = applyToChildren2D(node, op);
-		assert(p2d);
-		return ResultObject(p2d);
-	}
+	if (dim == 2) return ResultObject(applyToChildren2D(node, op));
 	else if (dim == 3) return applyToChildren3D(node, op);
 	return ResultObject();
 }
@@ -152,7 +149,7 @@ GeometryEvaluator::ResultObject GeometryEvaluator::applyToChildren3D(const Abstr
 		{
 			Geometry::Geometries actualchildren;
 			for(const auto &item : children) {
-				if (!item.second->isEmpty()) actualchildren.push_back(item);
+				if (item.second && !item.second->isEmpty()) actualchildren.push_back(item);
 			}
 			if (actualchildren.empty()) return ResultObject();
 			if (actualchildren.size() == 1) return ResultObject(actualchildren.front().second);
@@ -161,16 +158,18 @@ GeometryEvaluator::ResultObject GeometryEvaluator::applyToChildren3D(const Abstr
 		}
 		case OpenSCADOperator::UNION:
 		{
-			CGAL_Nef_polyhedron* N = CGALUtils::applyUnion(children.begin(), children.end());
-			return ResultObject(N);
+			Geometry::Geometries actualchildren;
+			for(const auto &item : children) {
+				if (item.second && !item.second->isEmpty()) actualchildren.push_back(item);
+			}
+			if (actualchildren.empty()) return ResultObject();
+			if (actualchildren.size() == 1) return ResultObject(actualchildren.front().second);
+			return ResultObject(CGALUtils::applyUnion3D(actualchildren.begin(), actualchildren.end()));
 			break;
 		}
-		default: 
+		default:
 		{
-			CGAL_Nef_polyhedron *N = CGALUtils::applyOperator(children, op);
-			// FIXME: Clarify when we can return nullptr and what that means
-			if (!N) N = new CGAL_Nef_polyhedron;
-			return ResultObject(N);
+			return ResultObject(CGALUtils::applyOperator3D(children, op));
 			break;
 		}
 	}
@@ -192,9 +191,11 @@ Polygon2d *GeometryEvaluator::applyHull2D(const AbstractNode &node)
 	// Collect point cloud
 	std::list<CGALPoint2> points;
 	for(const auto &p : children) {
-		for(const auto &o : p->outlines()) {
-			for(const auto &v : o.vertices) {
-				points.push_back(CGALPoint2(v[0], v[1]));
+		if (p) {
+			for(const auto &o : p->outlines()) {
+				for(const auto &v : o.vertices) {
+					points.push_back(CGALPoint2(v[0], v[1]));
+				}
 			}
 		}
 	}
@@ -212,8 +213,8 @@ Polygon2d *GeometryEvaluator::applyHull2D(const AbstractNode &node)
 			geometry->addOutline(outline);
 		}
 		catch (const CGAL::Failure_exception &e) {
-			PRINTB("ERROR: GeometryEvaluator::applyHull2D() during CGAL::convex_hull_2(): %s", e.what());
-		}
+			LOG(message_group::Warning,Location::NONE,"","GeometryEvaluator::applyHull2D() during CGAL::convex_hull_2(): %1$s",e.what());
+}
 		CGAL::set_error_behaviour(old_behaviour);
 	}
 	return geometry;
@@ -259,15 +260,20 @@ std::vector<const class Polygon2d *> GeometryEvaluator::collectChildren2D(const 
 		smartCacheInsert(*chnode, chgeom);
 		
 		if (chgeom) {
-			if (chgeom->getDimension() == 2) {
-				const Polygon2d *polygons = dynamic_cast<const Polygon2d *>(chgeom.get());
-				assert(polygons);
-				children.push_back(polygons);
+			if (chgeom->getDimension() == 3) {
+				LOG(message_group::Warning, item.first->modinst->location(), this->tree.getDocumentPath(), "Ignoring 3D child object for 2D operation");
+				children.push_back(nullptr); // replace 3D geometry with empty geometry
+			}	else {
+				if (chgeom->isEmpty()) {
+					children.push_back(nullptr);
+				} else {
+					const Polygon2d *polygons = dynamic_cast<const Polygon2d *>(chgeom.get());
+					assert(polygons);
+					children.push_back(polygons);
+				}
 			}
-			else {
-				std::string loc = item.first->modinst->location().toRelativeString(this->tree.getDocumentPath());
-				PRINTB("WARNING: Ignoring 3D child object for 2D operation, %s", loc);
-			}
+		} else {
+			children.push_back(nullptr);
 		}
 	}
 	return children;
@@ -290,7 +296,7 @@ void GeometryEvaluator::smartCacheInsert(const AbstractNode &node,
 	else {
 		if (!GeometryCache::instance()->contains(key)) {
 			if (!GeometryCache::instance()->insert(key, geom)) {
-				PRINT("WARNING: GeometryEvaluator: Node didn't fit into cache");
+				LOG(message_group::Warning,Location::NONE,"","GeometryEvaluator: Node didn't fit into cache.");
 			}
 		}
 	}
@@ -329,22 +335,19 @@ Geometry::Geometries GeometryEvaluator::collectChildren3D(const AbstractNode &no
 		// NB! We insert into the cache here to ensure that all children of
 		// a node is a valid object. If we inserted as we created them, the 
 		// cache could have been modified before we reach this point due to a large
-		// sibling object. 
+		// sibling object.
 		smartCacheInsert(*chnode, chgeom);
 		
-		if (chgeom) {
-			if (chgeom->getDimension() == 2) {
-				std::string loc = item.first->modinst->location().toRelativeString(this->tree.getDocumentPath());
-				PRINTB("WARNING: Ignoring 2D child object for 3D operation, %s", loc);
-			}
-			else if (chgeom->isEmpty() || chgeom->getDimension() == 3) {
-				children.push_back(item);
-			}
+		if (chgeom && chgeom->getDimension() == 2) {
+			LOG(message_group::Warning, item.first->modinst->location(), this->tree.getDocumentPath(), "Ignoring 2D child object for 3D operation");
+			children.push_back(std::make_pair(item.first, nullptr)); // replace 2D geometry with empty geometry
+		} else {
+			// Add children if geometry is 3D OR null/empty
+			children.push_back(item);
 		}
 	}
 	return children;
 }
-
 /*!
 	
 */
@@ -365,7 +368,11 @@ Polygon2d *GeometryEvaluator::applyToChildren2D(const AbstractNode &node, OpenSC
 	}
 
 	if (children.size() == 1) {
-		return new Polygon2d(*children[0]); // Copy
+		if (children[0]) {
+			return new Polygon2d(*children[0]); // Copy
+		} else {
+			return nullptr;
+		}
 	}
 
 	ClipperLib::ClipType clipType;
@@ -380,7 +387,7 @@ Polygon2d *GeometryEvaluator::applyToChildren2D(const AbstractNode &node, OpenSC
 		clipType = ClipperLib::ctDifference;
 		break;
 	default:
-		PRINTB("Error: Unknown boolean operation %d", int(op));
+		LOG(message_group::Error,Location::NONE,"","Unknown boolean operation %1$d",int(op));
 		return nullptr;
 		break;
 	}
@@ -673,7 +680,7 @@ Response GeometryEvaluator::visit(State &state, const CsgOpNode &node)
 	operation:
 		o Union all children
 		o Perform transform
- */			
+ */
 Response GeometryEvaluator::visit(State &state, const TransformNode &node)
 {
 	if (state.isPrefix() && isSmartCached(node)) return Response::PruneTraversal;
@@ -682,8 +689,7 @@ Response GeometryEvaluator::visit(State &state, const TransformNode &node)
 		if (!isSmartCached(node)) {
 			if (matrix_contains_infinity(node.matrix) || matrix_contains_nan(node.matrix)) {
 				// due to the way parse/eval works we can't currently distinguish between NaN and Inf
-				std::string loc = node.modinst->location().toRelativeString(this->tree.getDocumentPath());
-				PRINTB("WARNING: Transformation matrix contains Not-a-Number and/or Infinity - removing object. %s", loc);
+				LOG(message_group::Warning,node.modinst->location(),this->tree.getDocumentPath(),"Transformation matrix contains Not-a-Number and/or Infinity - removing object.");
 			}
 			else {
 				// First union all children
@@ -1054,7 +1060,7 @@ static Geometry *rotatePolygon(const RotateExtrudeNode &node, const Polygon2d &p
 			max_x = fmax(max_x, v[0]);
 
 			if ((max_x - min_x) > max_x && (max_x - min_x) > fabs(min_x)) {
-				PRINTB("ERROR: all points for rotate_extrude() must have the same X coordinate sign (range is %.2f -> %.2f)", min_x % max_x);
+				LOG(message_group::Error,Location::NONE,"","all points for rotate_extrude() must have the same X coordinate sign (range is %1$.2f -> %2$.2f)",min_x,max_x);
 				delete ps;
 				return nullptr;
 			}
@@ -1223,7 +1229,7 @@ Response GeometryEvaluator::visit(State &state, const ProjectionNode &node)
 							PolySet *ps = new PolySet(3);
 							bool err = CGALUtils::createPolySetFromNefPolyhedron3(*chN->p3, *ps);
 							if (err) {
-								PRINT("ERROR: Nef->PolySet failed");
+								LOG(message_group::Error,Location::NONE,"","Nef->PolySet failed");
 							}
 							else {
 								chPS.reset(ps);

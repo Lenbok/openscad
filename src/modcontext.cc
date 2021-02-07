@@ -8,6 +8,7 @@
 #include "ModuleCache.h"
 #include <cmath>
 #include <memory>
+#include "boost-utils.h"
 #ifdef DEBUG
 #include <boost/format.hpp>
 #endif
@@ -28,8 +29,8 @@ void ModuleContext::evaluateAssignments(const AssignmentList &assignments)
 	// First, assign all simple variables
 	std::list<std::string> undefined_vars;
  	for (const auto &ass : assignments) {
-		ValuePtr tmpval = ass.second->evaluate(this);
-		if (tmpval->isUndefined()) undefined_vars.push_back(ass.first);
+		Value tmpval = ass.second->evaluate(this);
+		if (tmpval.isUndefined()) undefined_vars.push_back(ass.first);
  		else this->set_variable(ass.first, tmpval);
  	}
 
@@ -50,12 +51,12 @@ void ModuleContext::evaluateAssignments(const AssignmentList &assignments)
 			std::unordered_map<std::string, Expression *>::iterator found = tmpass.find(*curr);
 			if (found != tmpass.end()) {
 				const Expression *expr = found->second;
-				ValuePtr tmpval = expr->evaluate(this);
+				Value tmpval = expr->evaluate(this);
 				// FIXME: it's not enough to check for undefined;
 				// we need to check for any undefined variable in the subexpression
 				// For now, ignore this and revisit the validity and order of variable
 				// assignments later
-				if (!tmpval->isUndefined()) {
+				if (!tmpval.isUndefined()) {
 					changed = true;
 					this->set_variable(*curr, tmpval);
 					undefined_vars.erase(curr);
@@ -74,8 +75,7 @@ void ModuleContext::initializeModule(const UserModule &module)
 	this->modules_p = &module.scope.modules;
 	for (const auto &assignment : module.scope.assignments) {
 		if (assignment->getExpr()->isLiteral() && this->variables.find(assignment->getName()) != this->variables.end()) {
-			std::string loc = assignment->location().toRelativeString(this->documentPath());
-			PRINTB("WARNING: Module %s: Parameter %s is overwritten with a literal, %s", module.name % assignment->getName() % loc);
+			LOG(message_group::Warning,assignment->location(),this->documentPath(),"Module %1$s: Parameter %2$s is overwritten with a literal",module.name,assignment->getName());
 		}
 		this->set_variable(assignment->getName(), assignment->getExpr()->evaluate(get_shared_ptr()));
 	}
@@ -89,7 +89,7 @@ shared_ptr<const UserFunction> ModuleContext::findLocalFunction(const std::strin
  	if (this->functions_p && this->functions_p->find(name) != this->functions_p->end()) {
 		auto f = this->functions_p->find(name)->second;
 		if (!f->is_enabled()) {
-			PRINTB("WARNING: Experimental builtin function '%s' is not enabled.", name);
+			LOG(message_group::Warning,Location::NONE,"","Experimental builtin function '%1$s' is not enabled.",name);
 			return nullptr;
 		}
 		return f;
@@ -102,19 +102,19 @@ shared_ptr<const UserModule> ModuleContext::findLocalModule(const std::string &n
 	if (this->modules_p && this->modules_p->find(name) != this->modules_p->end()) {
 		auto m = this->modules_p->find(name)->second;
 		if (!m->is_enabled()) {
-			PRINTB("WARNING: Experimental builtin module '%s' is not enabled.", name);
+			LOG(message_group::Warning,Location::NONE,"","Experimental builtin module '%1$s' is not enabled.",name);
 			return nullptr;
 		}
 		auto replacement = Builtins::instance()->isDeprecated(name);
 		if (!replacement.empty()) {
-			PRINT_DEPRECATION("The %s() module will be removed in future releases. Use %s instead.", name % replacement);
+			LOG(message_group::Deprecated,Location::NONE,"","The %1$s() module will be removed in future releases. Use %2$s instead.",std::string(name),std::string(replacement));
 		}
 		return m;
 	}
 	return nullptr;
 }
 
-ValuePtr ModuleContext::evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx) const
+Value ModuleContext::evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx) const
 {
 	const auto foundf = findLocalFunction(name);
 	std::shared_ptr<Context> self = (const_cast<ModuleContext *>(this))->get_shared_ptr();
@@ -148,11 +148,10 @@ std::string ModuleContext::dump(const AbstractModule *mod, const ModuleInstantia
 		if (m) {
 			s << "  module args:";
 			for(const auto &arg : m->definition_arguments) {
-				s << boost::format("    %s = %s") % arg->getName() % variables[arg->getName()];
+				s << boost::format("    %s = %s") % arg->getName() % variables.get(arg->getName());
 			}
 		}
 	}
-	typedef std::pair<std::string, ValuePtr> ValueMapType;
 	s << "  vars:";
 	for(const auto &v : constants) {
 		s << boost::format("    %s = %s") % v.first % v.second;
@@ -167,7 +166,7 @@ std::string ModuleContext::dump(const AbstractModule *mod, const ModuleInstantia
 }
 #endif
 
-ValuePtr FileContext::sub_evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx, FileModule *usedmod) const
+Value FileContext::sub_evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx, FileModule *usedmod) const
 {
 	ContextHandle<FileContext> ctx{Context::create<FileContext>(this->parent)};
 	ctx->initializeModule(*usedmod);
@@ -179,7 +178,7 @@ ValuePtr FileContext::sub_evaluate_function(const std::string &name, const std::
 	return usedmod->scope.functions[name]->evaluate(ctx.ctx, evalctx);
 }
 
-ValuePtr FileContext::evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx) const
+Value FileContext::evaluate_function(const std::string &name, const std::shared_ptr<EvalContext>& evalctx) const
 {
 	const auto foundf = findLocalFunction(name);
 	std::shared_ptr<Context> self = (const_cast<FileContext *>(this))->get_shared_ptr();

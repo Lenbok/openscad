@@ -35,6 +35,7 @@
 #include "qtgettext.h"
 #include "PlatformUtils.h"
 #include "QSettingsCached.h"
+#include "boost-utils.h"
 
 
 #include <boost/property_tree/ptree.hpp>
@@ -76,7 +77,7 @@ QFileInfoList UIUtils::openFiles(QWidget *parent)
 
     if(!fileInfoList.isEmpty())
     {
-	    QDir last_dir = fileInfoList[fileInfoList.size() - 1].dir(); // last_dir is set to directory of last choosen valid file
+	    QDir last_dir = fileInfoList[fileInfoList.size() - 1].dir(); // last_dir is set to directory of last chosen valid file
 	    last_dirname = last_dir.path();
 	    settings.setValue("lastOpenDirName", last_dirname);
 	}
@@ -118,7 +119,7 @@ static ptree *examplesTree()
 			examples_tree = new ptree;
 			read_json(path, *examples_tree);
 		} catch (const std::exception & e) {
-			PRINTB("Error reading examples.json: %s", e.what());
+			LOG(message_group::None,Location::NONE,"","Error reading examples.json: %1$s",e.what());
 			delete examples_tree;
 			examples_tree = nullptr;
 		}
@@ -153,6 +154,11 @@ QFileInfoList UIUtils::exampleFiles(const QString &category)
 		}
 	}
 	return examples;
+}
+
+void UIUtils::openURL(const QString& url)
+{
+    QDesktopServices::openUrl(QUrl(url));
 }
 
 void UIUtils::openHomepageURL()

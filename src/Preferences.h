@@ -56,6 +56,9 @@ public slots:
 	void on_checkBoxShowWarningsIn3dView_toggled(bool);
 	void on_checkBoxMouseCentricZoom_toggled(bool);
 	void on_timeThresholdOnRenderCompleteSoundEdit_textChanged(const QString &);
+	void on_consoleMaxLinesEdit_textChanged(const QString &);
+	void on_consoleFontChooser_activated(const QString &);
+	void on_consoleFontSize_currentIndexChanged(const QString &);
 	void on_checkBoxEnableAutocomplete_toggled(bool);
 	void on_lineEditCharacterThreshold_textChanged(const QString &);
   //
@@ -78,6 +81,8 @@ public slots:
 	void on_spinBoxLineWrapIndentationIndent_valueChanged(int);
 	void on_comboBoxLineWrapVisualizationStart_activated(int);
 	void on_comboBoxLineWrapVisualizationEnd_activated(int);
+	void on_comboBoxModifierNumberScrollWheel_activated(int);
+
 
 	// Display
 	void on_checkBoxHighlightCurrentLine_toggled(bool);
@@ -101,6 +106,7 @@ signals:
 	void updateUndockMode(bool undockMode) const;
 	void updateReorderMode(bool undockMode) const;
 	void fontChanged(const QString &family, uint size) const;
+	void consoleFontChanged(const QString &family, uint size) const;
 	void colorSchemeChanged(const QString &scheme) const;
 	void openCSGSettingsChanged() const;
 	void syntaxHighlightChanged(const QString &s) const;
@@ -109,6 +115,12 @@ signals:
 	void updateMouseCentricZoom(bool state) const;
 	void autocompleteChanged(bool status) const;
 	void characterThresholdChanged(int val) const;
+	void stepSizeChanged(int val) const;
+
+private slots:
+    void on_lineEditStepSize_textChanged(const QString &arg1);
+
+    void on_checkBoxEnableNumberScrollWheel_toggled(bool checked);
 
 private:
     Preferences(QWidget *parent = nullptr);

@@ -64,6 +64,8 @@ public:
 	QPoint mapToGlobal(const QPoint &) override;
 
 	void setCursorPosition(int line, int col) override;
+	void setFocus() override;
+	void setupAutoComplete(const bool forceOff = false);
 
 private:
 	void getRange(int *lineFrom, int *lineTo);
@@ -79,6 +81,7 @@ private:
 
 	bool eventFilter(QObject *obj, QEvent *event) override;
 	bool handleKeyEventNavigateNumber(QKeyEvent *);
+	bool handleWheelEventNavigateNumber(QWheelEvent *);
 	bool handleKeyEventBlockCopy(QKeyEvent *);
 	bool handleKeyEventBlockMove(QKeyEvent *);
 	void navigateOnNumber(int key);
@@ -94,6 +97,7 @@ private:
 signals:
 	void previewRequest(void);
 	void hyperlinkIndicatorClicked(int val);
+	void uriDropped(const QUrl&);
 
 public slots:
 	void zoomIn() override;

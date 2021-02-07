@@ -5,7 +5,7 @@
 #include "exceptions.h"
 #include "printutils.h"
 #include <boost/filesystem.hpp>
-
+#include "boost-utils.h"
 namespace fs = boost::filesystem;
 
 ModuleInstantiation::~ModuleInstantiation()
@@ -57,15 +57,21 @@ void ModuleInstantiation::print(std::ostream &stream, const std::string &indent,
 void IfElseModuleInstantiation::print(std::ostream &stream, const std::string &indent, const bool inlined) const
 {
 	ModuleInstantiation::print(stream, indent, inlined);
-	if (else_scope.numElements() > 0) {
-		stream << indent << "else ";
-		if (else_scope.numElements() == 1) {
-			else_scope.print(stream, indent, true);
+	if (else_scope) {
+		auto num_elements = else_scope->numElements();
+		if (num_elements == 0) {
+			stream << indent << "else;";
 		}
 		else {
-			stream << "{\n";
-			else_scope.print(stream, indent + "\t", false);
-			stream << indent << "}\n";
+			stream << indent << "else ";
+			if (num_elements == 1) {
+				else_scope->print(stream, indent, true);
+			}
+			else {
+				stream << "{\n";
+				else_scope->print(stream, indent + "\t", false);
+				stream << indent << "}\n";
+			}
 		}
 	}
 }
@@ -78,7 +84,7 @@ void IfElseModuleInstantiation::print(std::ostream &stream, const std::string &i
  * during normal operating, not runtime during error handling.
 */
 static void NOINLINE print_trace(const ModuleInstantiation *mod, const std::shared_ptr<Context> ctx){
-	PRINTB("TRACE: called by '%s', %s.", mod->name() % mod->location().toRelativeString(ctx->documentPath()));
+	LOG(message_group::Trace,mod->location(),ctx->documentPath(),"called by '%1$s'",mod->name());
 }
 
 AbstractNode *ModuleInstantiation::evaluate(const std::shared_ptr<Context> ctx) const
@@ -86,7 +92,7 @@ AbstractNode *ModuleInstantiation::evaluate(const std::shared_ptr<Context> ctx) 
 	ContextHandle<EvalContext> c{Context::create<EvalContext>(ctx, this->arguments, this->loc, &this->scope)};
 
 #if 0 && DEBUG
-	PRINT("New eval ctx:");
+	LOG(message_group::None,Location::NONE,"","New eval ctx:");
 	c.dump(nullptr, this);
 #endif
 	try{
@@ -106,8 +112,14 @@ std::vector<AbstractNode*> ModuleInstantiation::instantiateChildren(const std::s
 	return this->scope.instantiateChildren(evalctx);
 }
 
+LocalScope* IfElseModuleInstantiation::makeElseScope()
+{
+	this->else_scope = std::make_unique<LocalScope>();
+	return this->else_scope.get();
+}
+
 std::vector<AbstractNode*> IfElseModuleInstantiation::instantiateElseChildren(const std::shared_ptr<Context> evalctx) const
 {
-	return this->else_scope.instantiateChildren(evalctx);
+	return this->else_scope->instantiateChildren(evalctx);
 }
 
